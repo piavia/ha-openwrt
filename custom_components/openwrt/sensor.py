@@ -322,11 +322,19 @@ async def async_setup_entry(
                     continue
 
             # Cleanup orphaned wireless sensors (e.g. ghost radios)
+            # Only remove if the sensor is an unconfigured ghost placeholder, preserving legitimate
+            # entities during partial reboots or temporary interface omissions.
             if (
                 "_wifi_" in unique_id
                 and coordinator.data
                 and coordinator.data.wireless_interfaces
             ):
+                is_ghost_sensor = any(
+                    ghost in unique_id
+                    for ghost in ("default_radio", "wifinet", "ghost")
+                )
+                if not is_ghost_sensor:
+                    continue
                 found = False
                 for w in coordinator.data.wireless_interfaces:
                     if (

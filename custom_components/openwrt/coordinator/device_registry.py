@@ -520,10 +520,12 @@ class DeviceRegistryMixin(_Base):
                 or dev.model == "Access Point"
                 or (dev.name and dev.name.startswith("AP "))
             )
+            # Ghost names are unconfigured or legacy placeholder names (e.g., default_radio, wifinet, or bare 'radio')
+            # Legitimate radio names like 'radio0', 'radio1', '2.4 GHz' must not be flagged as ghosts.
             is_ghost_name = any(
                 ghost in (dev.name or "")
-                for ghost in ["default_radio", "wifinet", "radio"]
-            )
+                for ghost in ["default_radio", "wifinet"]
+            ) or (dev.name == "radio")
 
             # Identify if this is a randomized MAC device and skip_random is enabled
             is_random_tracked = False
@@ -532,15 +534,26 @@ class DeviceRegistryMixin(_Base):
                     is_random_tracked = True
 
             # Outage & reboot resilience guard:
-            # 1. Never purge AP or radio devices when wireless data is empty or during reboots.
-            # 2. Never purge legitimate named SSIDs; only remove ghost names (default_radio, wifinet).
-            if is_ap_related or dev.model in ("Access Point", "Wireless SSID", "Wireless Radio"):
-                if not (data.wireless_interfaces and ap_info):
+            # 1. Never purge legitimate AP or radio devices when wireless data is empty (reboot / wifi restart).
+            if is_ap_related or dev.model in (
+                "Access Point",
+                "Wireless SSID",
+                "Wireless Radio",
+            ):
+                if not is_ghost_name and not (data.wireless_interfaces and ap_info):
                     continue
+
+            # 2. Do not remove a physical radio device solely because another AP is active.
+            #    Preserve legitimate radio devices (such as radio0, 2.4 GHz) and only remove unconfigured ghost names.
+            if dev.model == "Wireless Radio" or any(
+                "_radio_" in str(ident[1])
+                for ident in dev.identifiers
+                if ident[0] == DOMAIN
+            ):
                 if not is_ghost_name:
                     continue
 
-            if is_ghost_name or is_random_tracked:
+            if is_ap_related or is_ghost_name or is_random_tracked:
                 _LOGGER.info(
                     "Removing orphaned/ghost/randomized device '%s' (id: %s, identifiers: %s)",
                     dev.name,

@@ -318,20 +318,22 @@ def _async_setup_wireless_sensors(
     for wifi in coordinator.data.wireless_interfaces:
         if not wifi.name:
             continue
-        # Use signal as a representative key for the group of sensors created by _create_wifi_sensors
-        key = f"wifi_{wifi.section or wifi.name}_signal"
-        uid_clients = f"{entry.entry_id}_wifi_{wifi.section or wifi.name}_clients"
-        if key not in tracked_keys or not ent_reg.async_get_entity_id("sensor", DOMAIN, uid_clients):
-            tracked_keys.add(key)
-            entities.extend(
-                _create_wifi_sensors(
-                    coordinator,
-                    entry,
-                    wifi.name,
-                    wifi.ssid,
-                    wifi.mode,
-                    wifi.frequency,
-                    wifi.section,
-                    wifi.ifname,
-                )
-            )
+        new_sensors = _create_wifi_sensors(
+            coordinator,
+            entry,
+            wifi.name,
+            wifi.ssid,
+            wifi.mode,
+            wifi.frequency,
+            wifi.section,
+            wifi.ifname,
+        )
+        for sensor in new_sensors:
+            uid = sensor.unique_id
+            if not uid:
+                continue
+            if uid not in tracked_keys or not ent_reg.async_get_entity_id(
+                "sensor", DOMAIN, uid
+            ):
+                tracked_keys.add(uid)
+                entities.append(sensor)
